@@ -1,6 +1,6 @@
 from jnpr.junos import Device
 from jnpr.junos.utils.config import Config
-from jnpr.junos.exception import RpcError
+from ncclient.operations.rpc import RPCError
 from jnpr.junos.exception import ConfigLoadError
 from jnpr.junos.exception import RpcTimeoutError
 from jnpr.junos.exception import ConnectTimeoutError
@@ -19,7 +19,6 @@ from collections import OrderedDict, defaultdict
 import yaml
 logger = logging.getLogger(__file__)
 
-#with Device(host=task.host.hostname, user=task.host.username, passwd=task.host.password,gather_facts=False) as dev:
 class JunOSDriver:
     def __init__(self, hostname, username, password, timeout=60, optional_args={}):
         """
@@ -38,7 +37,6 @@ class JunOSDriver:
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.config_replace = False
         self.locked = False
 
         self.port = optional_args.get("port", 22)
@@ -48,7 +46,7 @@ class JunOSDriver:
         self.ignore_warning = optional_args.get("ignore_warning", False)
         self.auto_probe = optional_args.get("auto_probe", 0)
         self.config_private = optional_args.get("config_private", False)
-
+        self.gather_facts = optional_args.get("gather_facts", False)
         # Junos driver specific options
         self.junos_config_database = optional_args.get(
             "junos_config_database", "committed"
@@ -78,6 +76,7 @@ class JunOSDriver:
                 ssh_private_key_file=self.key_file,
                 ssh_config=self.ssh_config_file,
                 port=self.port,
+                gather_facts=self.gather_facts,
             )
         else:
             self.device = Device(
@@ -86,10 +85,11 @@ class JunOSDriver:
                 password=password,
                 port=self.port,
                 ssh_config=self.ssh_config_file,
+                gather_facts=self.gather_facts,
             )
 
         self.platform = "junos"
-        self.profile = [self.platform]
+        self.js = SnapAdmin()
 
     def open(self):
         """Open the connection with the device."""
@@ -289,7 +289,7 @@ class JunOSDriver:
         
         return diff
 
-    def junos_commit(self, mode: str, commands: List[str] = [''], commit_comments: str = '', comfirm: int = 1):
+    def junos_commit(self, mode: str = 'exclusive', commands: List[str] = [''], commit_comments: str = '', comfirm: int = 1):
         config_set = '\n'.join(commands)
         diff = ''
         committed = False
@@ -309,10 +309,9 @@ class JunOSDriver:
         except Exception as e:
             logger.error(str(e))
 
-
         return {
-            diff:diff,
-            committed:committed
+            'diff':diff,
+            'committed':committed
         }
 
     def junos_rpc(self,rpc: str, to_str = 1):
@@ -326,13 +325,12 @@ class JunOSDriver:
         # get all check yml and output to file, will use it when post check
         device_test = ''
         for test in jsnapy_test:
-            device_test += self.test_yml.format(test)
+            device_test += self.jsnapy_test_yml.format(test)
 
         # jsnapy pre
-        js = SnapAdmin()
         config_host = self.jsnapy_data.format(
             self.hostname, self.username, self.password, device_test)
-        snappre = js.snap(config_host, "pre")
+        snappre = self.js.snap(config_host, "pre")
         '''
         # To_do: nothing to output, maybe get from db from file
         for val in snappre:
@@ -345,14 +343,13 @@ class JunOSDriver:
     def jsnapy_post(self,jsnapy_test: List[str]):
         device_test = ''
         for test in jsnapy_test:
-            device_test += self.test_yml.format(test)
+            device_test += self.jsnapy_test_yml.format(test)
 
         # jsnapy pre
-        js = SnapAdmin()
         config_host = self.jsnapy_data.format(
             self.hostname, self.username, self.password, device_test)
 
-        js.snap(config_host, "post")
+        self.js.snap(config_host, "post")
         snapchk = js.check(config_host, "pre", "post")
         result = []
         for val in snapchk:
@@ -361,15 +358,14 @@ class JunOSDriver:
         return result
 
     def jsnapy_check(self, jsnapy_test: List[str]):
-        js = SnapAdmin()
         device_test= ''
         for test in jsnapy_test:
-            device_test += self.test_yml.format(test)
+            device_test += self.jsnapy_test_yml.format(test)
 
         config_host = self.jsnapy_data.format(
             self.hostname, self.username, self.password, device_test)
 
-        snapvalue = js.snapcheck(config_host, "snap")
+        snapvalue = self.js.snapcheck(config_host, "snap")
         result = []
         for val in snapvalue:
             result.append(dict(val.test_details))
@@ -382,4 +378,3 @@ class JunOSDriver:
                 tmp_yaml = f.read()
             yaml_str = re.sub(r"unicode", "str", tmp_yaml)
             globals().update(FactoryLoader().load(yaml.safe_load(yaml_str)))
-    
