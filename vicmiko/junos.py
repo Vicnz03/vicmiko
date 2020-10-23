@@ -13,6 +13,7 @@ from jnpr.junos.factory import FactoryLoader
 import re
 import json
 import logging
+from lxml.builder import E
 from lxml import etree
 from typing import List
 from collections import OrderedDict, defaultdict
@@ -109,38 +110,108 @@ class JunOSDriver:
         """Close the connection."""
         self.device.close()
 
-    def commit_config(self, message="", revert_in=None):
-        pass
-
-    def commit_check(self, message="", revert_in=None):
-        return self.device.cu.commit_check()
-
-    def load_set_config(self):
-        pass
-
-    def compare_config(self):
-        """Compare candidate config with running."""
-        diff = self.device.cu.diff()
-
-        if diff is None:
-            return ""
-        else:
-            return diff.strip()
-
-    def discard_config(self):
-        """Discard changes (rollback 0)."""
-        self.device.cu.rollback(rb_id=0)
-
     def rollback(self,rb_id = 1):
         """Rollback to previous commit."""
         self.device.cu.rollback(rb_id=rb_id)
         self.commit_config()
 
-    def ping(self):
-        pass
+    def ping(
+        self,
+        destination,
+        source=False,
+        ttl=False,
+        timeout=False,
+        size=False,
+        count=False,
+        vrf=False,
+    ):
 
-    def tracerout(self):
-        pass
+        ping_dict = {}
+
+        source_str = ""
+        maxttl_str = ""
+        timeout_str = ""
+        size_str = ""
+        count_str = ""
+        vrf_str = ""
+
+        if source:
+            source_str = " source {source}".format(source=source)
+        if ttl:
+            maxttl_str = " ttl {ttl}".format(ttl=ttl)
+        if timeout:
+            timeout_str = " wait {timeout}".format(timeout=timeout)
+        if size:
+            size_str = " size {size}".format(size=size)
+        if count:
+            count_str = " count {count}".format(count=count)
+        if vrf:
+            vrf_str = " routing-instance {vrf}".format(vrf=vrf)
+
+        ping_command = "ping {destination}{source}{ttl}{timeout}{size}{count}{vrf}".format(
+            destination=destination,
+            source=source_str,
+            ttl=maxttl_str,
+            timeout=timeout_str,
+            size=size_str,
+            count=count_str,
+            vrf=vrf_str,
+        )
+
+        ping_rpc = E("command", ping_command)
+        rpc_reply = self.device._conn.rpc(ping_rpc)._NCElement__doc
+        # make direct RPC call via NETCONF
+        probe_summary = rpc_reply.find(".//probe-results-summary")
+
+        if probe_summary is None:
+            rpc_error = rpc_reply.find(".//rpc-error")
+            return {
+                "error": rpc_error
+            }
+        
+        return probe_summary
+
+    def traceroute(
+        self,
+        destination,
+        source=False,
+        ttl=False,
+        timeout=False,
+        vrf=False,
+    ):
+        """Execute traceroute and return results."""
+        traceroute_result = {}
+
+        # calling form RPC does not work properly :(
+        # but defined junos_route_instance_table just in case
+
+        source_str = ""
+        maxttl_str = ""
+        wait_str = ""
+        vrf_str = ""
+
+        if source:
+            source_str = " source {source}".format(source=source)
+        if ttl:
+            maxttl_str = " ttl {ttl}".format(ttl=ttl)
+        if timeout:
+            wait_str = " wait {timeout}".format(timeout=timeout)
+        if vrf:
+            vrf_str = " routing-instance {vrf}".format(vrf=vrf)
+
+        traceroute_command = "traceroute {destination}{source}{maxttl}{wait}{vrf}".format(
+            destination=destination,
+            source=source_str,
+            maxttl=maxttl_str,
+            wait=wait_str,
+            vrf=vrf_str,
+        )
+
+        traceroute_rpc = E("command", traceroute_command)
+        rpc_reply = self.device._conn.rpc(traceroute_rpc)._NCElement__doc
+        # make direct RPC call via NETCONF
+        traceroute_results = rpc_reply.find(".//traceroute-results")
+        return traceroute_results
 
     def junos_get(self, commands: List[str]):
         def _count(txt, none):  # Second arg for consistency only. noqa
