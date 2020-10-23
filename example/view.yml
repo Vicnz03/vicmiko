@@ -1,0 +1,14 @@
+---
+junos_routing_engine_table:
+    rpc: get-route-engine-information
+    args:
+    item: route-engine
+    key: memory-buffer-utilization
+    view: junos_routing_engine_view
+
+junos_routing_engine_view:
+  fields:
+    cpu-idle: { cpu-idle: int }
+    memory-dram-size: memory-dram-size | memory-system-total
+    memory-buffer-utilization: { memory-buffer-utilization: int }
+    memory-system-total-used: { memory-system-total-used: int }

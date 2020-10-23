@@ -1,0 +1,12 @@
+test_RE_status_mem:
+    - command: show chassis routing-engine
+    - item:
+        xpath: '//route-engine-information/route-engine'
+        tests:
+          - is-equal: status, OK
+            err: "Test failed!! Status is not OK, it is: <{{post['status']}}>"
+            info: "Test succeeded!! Status is: <{{post['status']}}>"
+  
+          - is-lt: memory-buffer-utilization, 70
+            err: "Test failed!! Memory util is > 70%, it is: <{{post['memory-buffer-utilization']}}>"
+            info: "Test succeeded!! Memory util is: <{{post['memory-buffer-utilization']}}>"
