@@ -45,5 +45,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         "junos-eznc>=2.5.3",
+        "jsnapy>=1.3.4",
     ],
 )

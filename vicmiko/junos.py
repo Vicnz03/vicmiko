@@ -378,3 +378,5 @@ class JunOSDriver:
                 tmp_yaml = f.read()
             yaml_str = re.sub(r"unicode", "str", tmp_yaml)
             globals().update(FactoryLoader().load(yaml.safe_load(yaml_str)))
+        except:
+            pass
