@@ -31,6 +31,7 @@ setup(
     version=find_version("vicmiko", "__init__.py"),
     description="Python library to interact with Junos devices. Based on jnpr-pyez and jsnapy",
     long_description=long_description,
+    long_description_content_type="text/markdown",
     url="https://github.com/Vicnz03/vicmiko",
     author="Vic Chen",
     author_email="vicnz03@hotmail.com",
