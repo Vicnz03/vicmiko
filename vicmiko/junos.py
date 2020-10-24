@@ -9,7 +9,9 @@ from jnpr.junos.exception import LockError as JnprLockError
 from jnpr.junos.exception import UnlockError as JnrpUnlockError
 from jnpr.jsnapy import SnapAdmin
 from jnpr.junos.factory import FactoryLoader
-
+from jnpr.junos.utils.sw import SW
+from jnpr.junos.utils.scp import SCP
+import xmltodict
 import re
 import json
 import logging
@@ -110,14 +112,9 @@ class JunOSDriver:
         """Close the connection."""
         self.device.close()
 
-    def rollback(self,rb_id = 1):
-        """Rollback to previous commit."""
-        self.device.cu.rollback(rb_id=rb_id)
-        self.commit_config()
-
-    def ping(
+    def junos_ping(
         self,
-        destination,
+        host,
         source=False,
         ttl=False,
         timeout=False,
@@ -125,93 +122,20 @@ class JunOSDriver:
         count=False,
         vrf=False,
     ):
+        rpc_reply = self.device.rpc.ping(host=host,source = source, ttl=ttl, timeout=timeout, size = size, count = count, vrf = vrf)
+        return xmltodict.parse(etree.tostring(rpc_reply))
 
-        ping_dict = {}
-
-        source_str = ""
-        maxttl_str = ""
-        timeout_str = ""
-        size_str = ""
-        count_str = ""
-        vrf_str = ""
-
-        if source:
-            source_str = " source {source}".format(source=source)
-        if ttl:
-            maxttl_str = " ttl {ttl}".format(ttl=ttl)
-        if timeout:
-            timeout_str = " wait {timeout}".format(timeout=timeout)
-        if size:
-            size_str = " size {size}".format(size=size)
-        if count:
-            count_str = " count {count}".format(count=count)
-        if vrf:
-            vrf_str = " routing-instance {vrf}".format(vrf=vrf)
-
-        ping_command = "ping {destination}{source}{ttl}{timeout}{size}{count}{vrf}".format(
-            destination=destination,
-            source=source_str,
-            ttl=maxttl_str,
-            timeout=timeout_str,
-            size=size_str,
-            count=count_str,
-            vrf=vrf_str,
-        )
-
-        ping_rpc = E("command", ping_command)
-        rpc_reply = self.device._conn.rpc(ping_rpc)._NCElement__doc
-        # make direct RPC call via NETCONF
-        probe_summary = rpc_reply.find(".//probe-results-summary")
-
-        if probe_summary is None:
-            rpc_error = rpc_reply.find(".//rpc-error")
-            return {
-                "error": rpc_error
-            }
-        
-        return probe_summary
-
-    def traceroute(
+    def junos_traceroute(
         self,
-        destination,
+        host,
         source=False,
         ttl=False,
         timeout=False,
         vrf=False,
+        no_resolve=True,
     ):
-        """Execute traceroute and return results."""
-        traceroute_result = {}
-
-        # calling form RPC does not work properly :(
-        # but defined junos_route_instance_table just in case
-
-        source_str = ""
-        maxttl_str = ""
-        wait_str = ""
-        vrf_str = ""
-
-        if source:
-            source_str = " source {source}".format(source=source)
-        if ttl:
-            maxttl_str = " ttl {ttl}".format(ttl=ttl)
-        if timeout:
-            wait_str = " wait {timeout}".format(timeout=timeout)
-        if vrf:
-            vrf_str = " routing-instance {vrf}".format(vrf=vrf)
-
-        traceroute_command = "traceroute {destination}{source}{maxttl}{wait}{vrf}".format(
-            destination=destination,
-            source=source_str,
-            maxttl=maxttl_str,
-            wait=wait_str,
-            vrf=vrf_str,
-        )
-
-        traceroute_rpc = E("command", traceroute_command)
-        rpc_reply = self.device._conn.rpc(traceroute_rpc)._NCElement__doc
-        # make direct RPC call via NETCONF
-        traceroute_results = rpc_reply.find(".//traceroute-results")
-        return traceroute_results
+        rpc_reply = self.device.rpc.traceroute(host=host,source = source, ttl=ttl, timeout=timeout, vrf = vrf, no_resolve=no_resolve)
+        return xmltodict.parse(etree.tostring(rpc_reply))
 
     def junos_get(self, commands: List[str]):
         def _count(txt, none):  # Second arg for consistency only. noqa
@@ -349,16 +273,21 @@ class JunOSDriver:
 
         return result
 
-    def junos_compare(self, commands: List[str] = ['']):
+    def junos_compare(self, commands: List[str] = [''], check = False):
         diff = ''
+        check_result = False
         config_set = '\n'.join(commands)
         with Config(self.device, mode='private') as cu: # config exclusive
             cu.load(config_set, format="set", merge=True) # load config
-            cu.commit_check() # commit check
             diff = cu.diff(0) # show | compare 
+            if check:
+                check_result = cu.commit_check() # commit check
             cu.rollback()
         
-        return diff
+        return {
+            'diff': diff,
+            'check': check_result,
+        }
 
     def junos_commit(self, mode: str = 'exclusive', commands: List[str] = [''], commit_comments: str = '', comfirm: int = 1):
         config_set = '\n'.join(commands)
@@ -367,6 +296,51 @@ class JunOSDriver:
         try:
             with Config(self.device, mode=mode) as cu: # config exclusive
                 cu.load(config_set, format="set", merge=True) # load config
+                cu.commit_check() # commit check
+                diff = cu.diff(0) # show | compare 
+                committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
+                cu.commit_check() # commit check
+
+        except RPCError as e:
+            logger.error(str(e))
+            cu.rollback()
+            cu.unlock()
+
+        except Exception as e:
+            logger.error(str(e))
+
+        return {
+            'diff':diff,
+            'committed':committed
+        }
+
+    def junos_compare_file(self, file_path: str, file_location: str , check = False):
+        diff = ''
+        check_result = False
+        with Config(self.device, mode='private') as cu: # config exclusive
+            if file_location == 'local':
+                cu.load(path= file_path, merge=True) # load config
+            elif file_location == 'remote':
+                cu.load(url= file_path, merge=True)
+            diff = cu.diff(0) # show | compare 
+            if check:
+                check_result = cu.commit_check() # commit check
+            cu.rollback()
+        
+        return {
+            'diff': diff,
+            'check': check_result,
+        }
+
+    def junos_commit_file(self, file_path: str, file_location: str, mode: str = 'exclusive', commit_comments: str = '', comfirm: int = 1):
+        diff = ''
+        committed = False
+        try:
+            with Config(self.device, mode=mode) as cu: # config exclusive
+                if file_location == 'local':
+                    cu.load(path= file_path, merge=True) # load config
+                elif file_location =='remote':
+                    cu.load(url= file_path, merge=True)
                 cu.commit_check() # commit check
                 diff = cu.diff(0) # show | compare 
                 committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
@@ -421,7 +395,7 @@ class JunOSDriver:
             self.hostname, self.username, self.password, device_test)
 
         self.js.snap(config_host, "post")
-        snapchk = js.check(config_host, "pre", "post")
+        snapchk = self.js.check(config_host, "pre", "post")
         result = []
         for val in snapchk:
             result.append(dict(val.test_details))
@@ -451,3 +425,18 @@ class JunOSDriver:
             globals().update(FactoryLoader().load(yaml.safe_load(yaml_str)))
         except:
             pass
+    
+    def junos_install(self, package, validate=False):
+        sw = SW(self.device)
+        status, msg = sw.install(package=package, validate=validate, checksum_algorithm='sha256')
+        return {
+            'status': status,
+            'msg': msg,
+        }
+
+    def junos_scp(self,mode, local, remote):
+        with SCP(self.device, progress=True) as scp:
+            if mode == 'put':
+                scp.put(local, remote_path=remote)
+            elif mode =='get':
+                scp.get(remote, local_path=local)

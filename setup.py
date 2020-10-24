@@ -46,5 +46,6 @@ setup(
     install_requires=[
         "junos-eznc>=2.5.3",
         "jsnapy>=1.3.4",
+        "xmltodict>=0.12.0",
     ],
 )
