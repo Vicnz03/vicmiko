@@ -256,17 +256,19 @@ class JunOSDriver:
                 for item in cmds:
                     if 'display' in item:
                         display = '|' + item # if display in command, store it in display
-
-                rsp = self.device.rpc.cli(command=cmds[0]+display, format='text') # rpc call first part of cmd and display, leave the rest for later
-                if rsp is True:
-                    cmd_result = ""
-                elif rsp.tag in ["output", "rpc-reply"]:
-                    cmd_result= etree.tostring(rsp, method="text", with_tail=False, encoding='unicode')
-                elif rsp.tag == "configuration-information":
-                    cmd_result = rsp.findtext("configuration-output")
-                elif rsp.tag == "rpc":
-                    return rsp[0]
-                cmd_result = _process_pipe(command,cmd_result)
+                try:
+                    rsp = self.device.rpc.cli(command=cmds[0]+display, format='text') # rpc call first part of cmd and display, leave the rest for later
+                    if rsp is True:
+                        cmd_result = ""
+                    elif rsp.tag in ["output", "rpc-reply"]:
+                        cmd_result= etree.tostring(rsp, method="text", with_tail=False, encoding='unicode')
+                    elif rsp.tag == "configuration-information":
+                        cmd_result = rsp.findtext("configuration-output")
+                    elif rsp.tag == "rpc":
+                        return rsp[0]
+                    cmd_result = _process_pipe(command,cmd_result)
+                except:
+                    cmd_result = 'RPC call failed'
                 result[command] = cmd_result
             else:
                 result[command] = 'Invalid command'
