@@ -361,9 +361,9 @@ class JunOSDriver:
             'committed':committed
         }
 
-    def junos_rpc(self,rpc: str, to_str = 1):
+    def junos_rpc(self,rpc: str, to_str = 1, **kwargs):
         method_to_call = getattr(self.device.rpc, rpc)
-        result = method_to_call()
+        result = method_to_call(**kwargs)
         if to_str:
             result = etree.tostring(result, encoding="unicode", method="text", with_tail=False)
         return result
