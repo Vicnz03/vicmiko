@@ -99,7 +99,7 @@ class JunOSDriver:
         try:
             self.device.open(auto_probe=self.auto_probe)
         except (ConnectTimeoutError, ProbeError) as cte:
-            pass
+            raise Exception(cte.msg)
         self.device.timeout = self.timeout
         self.device._conn._session.transport.set_keepalive(self.keepalive)
         if hasattr(self.device, "cu"):
@@ -107,6 +107,8 @@ class JunOSDriver:
             # ValueError: requested attribute name cu already exists
             del self.device.cu
         self.device.bind(cu=Config)
+        if not self.lock_disable and self.session_config_lock:
+            self._lock()
 
     def close(self):
         """Close the connection."""
