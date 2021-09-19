@@ -252,7 +252,6 @@ class JunOSDriver:
         result = {}
         cmd_result = ""
         invaild_cmd = re.compile('^(request|clear|start|restart).*')
-        get_config = re.compile('^show configuration .*')
         for command in commands:
             if not invaild_cmd.match(command): # if not invaild command predefined
                 #(cmd, _, _) = command.partition("|")
@@ -272,8 +271,10 @@ class JunOSDriver:
                     elif rsp.tag == "rpc":
                         return rsp[0]
                     cmd_result = _process_pipe(command,cmd_result)
-                except:
-                    cmd_result = 'RPC call failed'
+                except Exception as e:
+                    logger.error(str(e))
+                    raise
+                
                 result[command] = cmd_result
             else:
                 result[command] = 'Invalid command'
@@ -283,12 +284,16 @@ class JunOSDriver:
     def junos_compare(self, config: str, check = False, format: str='set'):
         diff = ''
         check_result = False
-        with Config(self.device, mode='private') as cu: # config exclusive
-            cu.load(config, format=format, merge=True) # load config
-            diff = cu.diff(0) # show | compare 
-            if check:
-                check_result = cu.commit_check() # commit check
-            cu.rollback()
+        try:
+            with Config(self.device, mode='private') as cu: # config exclusive
+                cu.load(config, format=format, merge=True) # load config
+                diff = cu.diff(0) # show | compare 
+                if check:
+                    check_result = cu.commit_check() # commit check
+                cu.rollback()
+        except Exception as e:
+            logger.error(str(e))
+            raise
         
         return {
             'diff': diff,
@@ -300,19 +305,22 @@ class JunOSDriver:
         committed = False
         try:
             with Config(self.device, mode=mode) as cu: # config exclusive
-                cu.load(config, format=format, merge=True) # load config
-                cu.commit_check() # commit check
-                diff = cu.diff(0) # show | compare 
-                committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
-                cu.commit_check() # commit check
+                try:
+                    cu.load(config, format=format, merge=True) # load config
+                    cu.commit_check() # commit check
+                    diff = cu.diff(0) # show | compare 
+                    committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
+                    cu.commit_check() # commit check
 
-        except RPCError as e:
-            logger.error(str(e))
-            cu.rollback()
-            cu.unlock()
+                except RPCError as e:
+                    logger.error(str(e))
+                    cu.rollback()
+                    cu.unlock()
+                    raise
 
         except Exception as e:
             logger.error(str(e))
+            raise
 
         return {
             'diff':diff,
@@ -322,15 +330,19 @@ class JunOSDriver:
     def junos_compare_file(self, file_path: str, file_location: str , check = False):
         diff = ''
         check_result = False
-        with Config(self.device, mode='private') as cu: # config exclusive
-            if file_location == 'local':
-                cu.load(path= file_path, merge=True) # load config
-            elif file_location == 'remote':
-                cu.load(url= file_path, merge=True)
-            diff = cu.diff(0) # show | compare 
-            if check:
-                check_result = cu.commit_check() # commit check
-            cu.rollback()
+        try:
+            with Config(self.device, mode='private') as cu: # config exclusive
+                if file_location == 'local':
+                    cu.load(path= file_path, merge=True) # load config
+                elif file_location == 'remote':
+                    cu.load(url= file_path, merge=True)
+                diff = cu.diff(0) # show | compare 
+                if check:
+                    check_result = cu.commit_check() # commit check
+                cu.rollback()
+        except Exception as e:
+            logger.error(str(e))
+            raise
         
         return {
             'diff': diff,
@@ -342,22 +354,26 @@ class JunOSDriver:
         committed = False
         try:
             with Config(self.device, mode=mode) as cu: # config exclusive
-                if file_location == 'local':
-                    cu.load(path= file_path, merge=True) # load config
-                elif file_location =='remote':
-                    cu.load(url= file_path, merge=True)
-                cu.commit_check() # commit check
-                diff = cu.diff(0) # show | compare 
-                committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
-                cu.commit_check() # commit check
+                try:
+                    if file_location == 'local':
+                        cu.load(path= file_path, merge=True) # load config
+                    elif file_location =='remote':
+                        cu.load(url= file_path, merge=True)
+                    cu.commit_check() # commit check
+                    diff = cu.diff(0) # show | compare 
+                    committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
+                    cu.commit_check() # commit check
 
-        except RPCError as e:
-            logger.error(str(e))
-            cu.rollback()
-            cu.unlock()
+                except RPCError as e:
+                    logger.error(str(e))
+                    cu.rollback()
+                    cu.unlock()
+                    raise
+            
 
         except Exception as e:
             logger.error(str(e))
+            raise
 
         return {
             'diff':diff,
@@ -365,10 +381,16 @@ class JunOSDriver:
         }
 
     def junos_rpc(self,rpc: str, to_str = 1, **kwargs):
-        method_to_call = getattr(self.device.rpc, rpc)
-        result = method_to_call(**kwargs)
-        if to_str:
-            result = etree.tostring(result, encoding="unicode", method="text", with_tail=False)
+        try:
+            method_to_call = getattr(self.device.rpc, rpc)
+            result = method_to_call(**kwargs)
+            if to_str:
+                result = etree.tostring(result, encoding="unicode", method="text", with_tail=False)
+
+        except Exception as e:
+            logger.error(str(e))
+            raise
+
         return result
     '''
     def jsnapy_pre(self, jsnapy_test: List[str]):
