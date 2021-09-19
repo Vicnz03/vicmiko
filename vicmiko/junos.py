@@ -54,7 +54,7 @@ class JunOSDriver:
         self.junos_config_database = optional_args.get(
             "junos_config_database", "committed"
         )
-
+        '''
         # config template
         self.jsnapy_test_yml = """  - {}
         """
@@ -71,6 +71,7 @@ class JunOSDriver:
             check_from_sqlite: yes
             database_name: jsnapy.db  
         """
+        '''
         if self.key_file:
             self.device = Device(
                 hostname,
@@ -279,12 +280,11 @@ class JunOSDriver:
 
         return result
 
-    def junos_compare(self, commands: List[str] = [''], check = False, format: str='set'):
+    def junos_compare(self, config: str, check = False, format: str='set'):
         diff = ''
         check_result = False
-        config_set = '\n'.join(commands)
         with Config(self.device, mode='private') as cu: # config exclusive
-            cu.load(config_set, format=format, merge=True) # load config
+            cu.load(config, format=format, merge=True) # load config
             diff = cu.diff(0) # show | compare 
             if check:
                 check_result = cu.commit_check() # commit check
@@ -295,13 +295,12 @@ class JunOSDriver:
             'check': check_result,
         }
 
-    def junos_commit(self, mode: str = 'exclusive', commands: List[str] = [''], format: str='set', commit_comments: str = '', comfirm: int = 1):
-        config_set = '\n'.join(commands)
+    def junos_commit(self, config: str, mode: str = 'exclusive', format: str='set', commit_comments: str = '', comfirm: int = 1):
         diff = ''
         committed = False
         try:
             with Config(self.device, mode=mode) as cu: # config exclusive
-                cu.load(config_set, format=format, merge=True) # load config
+                cu.load(config, format=format, merge=True) # load config
                 cu.commit_check() # commit check
                 diff = cu.diff(0) # show | compare 
                 committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
@@ -371,7 +370,7 @@ class JunOSDriver:
         if to_str:
             result = etree.tostring(result, encoding="unicode", method="text", with_tail=False)
         return result
-
+    '''
     def jsnapy_pre(self, jsnapy_test: List[str]):
         # get all check yml and output to file, will use it when post check
         device_test = ''
@@ -382,13 +381,13 @@ class JunOSDriver:
         config_host = self.jsnapy_data.format(
             self.hostname, self.username, self.password, device_test)
         snappre = self.js.snap(config_host, "pre")
-        '''
+    
         # To_do: nothing to output, maybe get from db from file
         for val in snappre:
             with open(host_pre_result, 'w') as f:
                 f.write(json.dumps(dict(val.test_details), indent=4))
         option: get from log
-        '''
+
 
 
     def jsnapy_post(self,jsnapy_test: List[str]):
@@ -422,7 +421,7 @@ class JunOSDriver:
             result.append(dict(val.test_details))
 
         return result
-
+    '''
     def load_junos_view(self, view_path):
         try:
             with open(view_path) as f:
