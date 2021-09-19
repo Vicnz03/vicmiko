@@ -93,7 +93,7 @@ class JunOSDriver:
             )
 
         self.platform = "junos"
-        self.js = SnapAdmin()
+        #self.js = SnapAdmin()
 
     def open(self):
         """Open the connection with the device."""
