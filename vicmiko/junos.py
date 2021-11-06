@@ -310,7 +310,8 @@ class JunOSDriver:
                     cu.commit_check() # commit check
                     diff = cu.diff(0) # show | compare 
                     committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
-                    cu.commit_check() # commit check
+                    if comfirm:
+                        cu.commit_check() # commit check
 
                 except RPCError as e:
                     logger.error(str(e))
