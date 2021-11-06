@@ -300,11 +300,11 @@ class JunOSDriver:
             'check': check_result,
         }
 
-    def junos_commit(self, config: str, mode: str = 'exclusive', format: str='set', commit_comments: str = '', comfirm: int = 1):
+    def junos_commit(self, config: str, mode: str = 'private', format: str='set', commit_comments: str = '', comfirm: int = 1):
         diff = ''
         committed = False
         try:
-            with Config(self.device, mode=mode) as cu: # config exclusive
+            with Config(self.device, mode=mode) as cu: # config private
                 try:
                     cu.load(config, format=format, merge=True) # load config
                     cu.commit_check() # commit check
@@ -380,7 +380,7 @@ class JunOSDriver:
             'committed':committed
         }
 
-    def junos_rpc(self,rpc: str, to_str = 1, **kwargs):
+    def junos_rpc(self,rpc: str, to_str = 0, **kwargs):
         try:
             method_to_call = getattr(self.device.rpc, rpc)
             result = method_to_call(**kwargs)
