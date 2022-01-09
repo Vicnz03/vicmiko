@@ -281,12 +281,12 @@ class JunOSDriver:
 
         return result
 
-    def junos_compare(self, config: str, check = False, format: str='set'):
+    def junos_compare(self, config: str, check = False, format: str='set', load_action = 'merge'):
         diff = ''
         check_result = False
         try:
             with Config(self.device, mode='private') as cu: # config exclusive
-                cu.load(config, format=format, merge=True) # load config
+                cu.load(config, format=format, **{load_action: True}) # load config
                 diff = cu.diff(0) # show | compare 
                 if check:
                     check_result = cu.commit_check() # commit check
@@ -300,13 +300,13 @@ class JunOSDriver:
             'check': check_result,
         }
 
-    def junos_commit(self, config: str, mode: str = 'private', format: str='set', commit_comments: str = '', comfirm: int = 1):
+    def junos_commit(self, config: str, mode: str = 'private', format: str='set', commit_comments: str = '', comfirm: int = 1, load_action = 'merge'):
         diff = ''
         committed = False
         try:
             with Config(self.device, mode=mode) as cu: # config private
                 try:
-                    cu.load(config, format=format, merge=True) # load config
+                    cu.load(config, format=format, **{load_action: True}) # load config
                     cu.commit_check() # commit check
                     diff = cu.diff(0) # show | compare 
                     committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
