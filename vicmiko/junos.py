@@ -300,18 +300,18 @@ class JunOSDriver:
             'check': check_result,
         }
 
-    def junos_commit(self, config: str, mode: str = 'private', format: str='set', commit_comments: str = '', comfirm: int = 1, load_action = 'merge'):
+    def junos_commit(self, config: str, mode: str = 'private', format: str='set', commit_comments: str = '', comfirm: int = 1, load_action = 'merge', commit_timeout = 120):
         diff = ''
         committed = False
         try:
             with Config(self.device, mode=mode) as cu: # config private
                 try:
                     cu.load(config, format=format, **{load_action: True}) # load config
-                    cu.commit_check() # commit check
+                    cu.commit_check(timeout=commit_timeout) # commit check
                     diff = cu.diff(0) # show | compare 
-                    committed = cu.commit(confirm=comfirm, comment=commit_comments) # commit confirm 1 comment
+                    committed = cu.commit(confirm=comfirm, comment=commit_comments, timeout=commit_timeout) # commit confirm 1 comment
                     if comfirm:
-                        cu.commit_check() # commit check
+                        cu.commit_check(timeout=commit_timeout) # commit check
 
                 except RPCError as e:
                     logger.error(str(e))
